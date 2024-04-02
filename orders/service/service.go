@@ -3,24 +3,21 @@ package service
 import (
 	"github.com/aksbuzz/bookstore-microservice/orders/repository"
 	"github.com/go-chi/chi/v5"
+	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 )
 
 type Service struct {
 	Repository repository.OrderRepository
 	Redis      *redis.Client
+	nats       *nats.Conn
 }
 
-func New(repository repository.OrderRepository) *Service {
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
-
+func New(repository repository.OrderRepository, rc *redis.Client, nc *nats.Conn) *Service {
 	return &Service{
 		Repository: repository,
-		Redis:      redisClient,
+		Redis:      rc,
+		nats:       nc,
 	}
 }
 

@@ -93,29 +93,34 @@ func (r *Repository) Checkout(ctx context.Context, order *model.CheckoutOrder, i
 }
 
 func (r *Repository) Find(ctx context.Context, id uint64) (*model.Order, error) {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT o.id, o.date, o.total, b.author, b.name, b.cover, oi.id, oi.quantity, oi.price
+	row := r.db.QueryRowContext(ctx, `
+		SELECT o.id, o.date, o.total
 		FROM "order" o
-		JOIN order_item oi ON o.id = oi.order_id
-		JOIN book b ON oi.book_id = b.id
 		WHERE o.id = $1
+	`, id)
+
+	var order model.Order
+	if err := row.Scan(&order.Id, &order.Date, &order.Total); err != nil {
+		return nil, err
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT b.author, b.name, b.cover, oi.quantity, oi.price
+		FROM order_item oi
+		JOIN book b ON oi.book_id = b.id
+		WHERE oi.order_id = $1
 	`, id)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var order model.Order
 	for rows.Next() {
 		var item model.OrderItem
 		if err := rows.Scan(
-			&order.Id,
-			&order.Date,
-			&order.Total,
 			&item.Author,
 			&item.Name,
 			&item.Cover,
-			&item.Id,
 			&item.Quantity,
 			&item.Price,
 		); err != nil {

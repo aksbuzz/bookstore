@@ -7,6 +7,8 @@ import (
 
 	"github.com/aksbuzz/bookstore-microservice/orders/repository"
 	"github.com/aksbuzz/bookstore-microservice/orders/service"
+	"github.com/nats-io/nats.go"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/aksbuzz/bookstore-microservice/shared/config"
 	"github.com/aksbuzz/bookstore-microservice/shared/db"
@@ -35,8 +37,19 @@ func main() {
 		return
 	}
 	repo := repository.New(db)
+	rc := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+	nc, err := nats.Connect("nats://localhost:4222")
+	if err != nil {
+		cancel()
+		slog.Error("failed to connect to nats", "error", err.Error())
+		return
+	}
 
-	service := service.New(repo)
+	service := service.New(repo, rc, nc)
 	service.Register(router)
 
 	server := server.New(ctx, router, cfg)

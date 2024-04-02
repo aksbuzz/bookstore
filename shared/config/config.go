@@ -6,8 +6,5 @@ type Config struct {
 }
 
 func New(DSN string, ServerPort uint16) *Config {
-	return &Config{
-		DSN:        DSN,
-		ServerPort: ServerPort,
-	}
+	return &Config{DSN: DSN, ServerPort: ServerPort}
 }

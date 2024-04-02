@@ -4,37 +4,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/aksbuzz/bookstore-microservice/orders/model"
 	"github.com/nats-io/nats.go"
 )
 
-func OrderPlaced(items []*model.CheckoutItem) error {
-	books := make([]uint64, 0, len(items))
-	for _, item := range items {
-		books = append(books, item.BookId)
+func OrderPlaced(nc *nats.Conn, items []*model.CheckoutItem) error {
+	var EventSubject = "ORDER.placed"
+	bookIDs := make([]uint64, len(items))
+	for i, item := range items {
+		bookIDs[i] = item.BookId
 	}
 
-	payload, err := json.Marshal(model.OrderPlaced{Books: books})
+	payload, err := json.Marshal(model.OrderPlaced{Books: bookIDs})
 	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %w", err)
+		return fmt.Errorf("failed to marshal order placed payload: %w", err)
 	}
 
-	nc, err := nats.Connect("nats://localhost:4222")
-	if err != nil {
-		return fmt.Errorf("failed to connect to nats: %w", err)
+	slog.Info(fmt.Sprintf("Publishing '%s' event", EventSubject))
+	if err := nc.Publish(EventSubject, payload); err != nil {
+		return fmt.Errorf("failed to publish '%s' event: %w", EventSubject, err)
 	}
-	defer nc.Close()
-
-	slog.Info("Publishing order.placed event")
-	msg, err := nc.Request("order.placed", payload, 5*time.Second)
-	if err != nil {
-		return fmt.Errorf("failed to request order.placed: %w", err)
-	}
-	if msg.Data == nil {
-		return fmt.Errorf("received nil response from order.placed")
-	}
-
 	return nil
 }

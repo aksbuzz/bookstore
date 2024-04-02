@@ -10,30 +10,23 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-func HandleOrderPlaced(ctx context.Context, repo repository.CartRepository) {
-	nc, err := nats.Connect("nats://localhost:4222")
-	if err != nil {
-		slog.Error("failed to connect to nats", "error", err)
-		return
-	}
-	defer nc.Close()
-
+func HandleOrderPlaced(ctx context.Context, nc *nats.Conn, repo repository.CartRepository) {
 	slog.Info("Subscribing to order.placed event")
-	_, err = nc.Subscribe("order.placed", func(msg *nats.Msg) {
+	_, err := nc.Subscribe("ORDER.placed", func(msg *nats.Msg) {
 		payload := &model.OrderPlaced{}
 		if err := json.Unmarshal(msg.Data, payload); err != nil {
-			msg.Respond(nil)
+			slog.Error("failed to unmarshal order placed payload", "error", err)
 			return
 		}
 
 		for _, bookId := range payload.Books {
 			if err := repo.RemoveFromCart(ctx, bookId); err != nil {
-				msg.Respond(nil)
+				slog.Error("failed to remove book from cart", "error", err)
 				return
 			}
 		}
 
-		msg.Respond([]byte("OK"))
+		slog.Info("Deleted items from cart")
 	})
 	if err != nil {
 		slog.Error("failed to subscribe to order.placed event", "error", err)

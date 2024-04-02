@@ -1,11 +1,9 @@
 package service
 
 import (
-	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/aksbuzz/bookstore-microservice/orders/events"
@@ -58,13 +56,12 @@ func (s *Service) Checkout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: replace with NATS streaming
-	s.updateBestSellers(ctx, checkout.Items)
-
-	if err := events.OrderPlaced(checkout.Items); err != nil {
+	if err := events.UpdateBestsellers(s.nats, checkout.Items); err != nil {
 		slog.Error("failed to publish event", "error", err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	}
+
+	if err := events.OrderPlaced(s.nats, checkout.Items); err != nil {
+		slog.Error("failed to publish event", "error", err.Error())
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -97,17 +94,6 @@ func (s *Service) GetOrder(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(&order); err != nil {
 		slog.Error("failed to encode order", "error", err.Error())
 		return
-	}
-}
-
-// TODO: replace with NATS streaming
-func (s *Service) updateBestSellers(ctx context.Context, items []*model.CheckoutItem) {
-	for _, item := range items {
-		_, err := s.Redis.ZIncrBy(ctx, "TopBooks:AllTime", float64(item.Quantity), strconv.FormatUint(item.BookId, 10)).Result()
-		if err != nil {
-			slog.Error("failed to update bestsellers", "error", err.Error())
-			continue
-		}
 	}
 }
 

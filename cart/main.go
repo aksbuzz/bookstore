@@ -8,6 +8,7 @@ import (
 	"github.com/aksbuzz/bookstore-microservice/cart/events"
 	"github.com/aksbuzz/bookstore-microservice/cart/repository"
 	"github.com/aksbuzz/bookstore-microservice/cart/service"
+	"github.com/nats-io/nats.go"
 
 	"github.com/aksbuzz/bookstore-microservice/shared/config"
 	"github.com/aksbuzz/bookstore-microservice/shared/db"
@@ -23,29 +24,47 @@ var (
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
+	// Initialize logger
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	slog.SetDefault(logger)
 
+	// Initialize router
 	router := router.New()
+
+	// Initialize config
 	cfg := config.New(DSN, ServerPort)
+
+	// Initialize database
 	db, err := db.New(cfg.DSN)
 	if err != nil {
-		cancel()
 		slog.Error("failed to connect to db", "error", err.Error())
 		return
 	}
+	defer db.Close()
+
+	// Initialize repository
 	repo := repository.New(db)
 
+	// Initialize NATS
+	nc, err := nats.Connect("nats://localhost:4222")
+	if err != nil {
+		slog.Error("failed to connect to nats", "error", err.Error())
+		return
+	}
+	defer nc.Close()
+
+	// Initialize service
 	service := service.New(repo)
 	service.Register(router)
 
+	go events.HandleOrderPlaced(ctx, nc, repo)
+
+	// Initialize server
 	server := server.New(ctx, router, cfg)
 
-	go events.HandleOrderPlaced(ctx, repo)
-
 	if err := server.Start(ctx); err != nil {
-		cancel()
 		slog.Error("failed to start server", "error", err.Error())
 		return
 	}
